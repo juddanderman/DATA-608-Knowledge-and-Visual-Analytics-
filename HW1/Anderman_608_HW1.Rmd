@@ -1,0 +1,107 @@
+---
+title: "Data 608 Homework 1"
+author: "Judd Anderman"
+date: "September 5, 2017"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r get-data, warning = FALSE, message = FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+url <- "https://raw.githubusercontent.com/charleyferrari/CUNY_DATA608/master/lecture1/Data/inc5000_data.csv"
+
+df <- read.csv(url)
+```
+
+### Question 1
+
+```{r p1, warning = FALSE, message = FALSE, fig.height = 7}
+ggplot(df, aes(State)) +
+  geom_bar() +
+  scale_x_discrete(limits = rev(levels(df$State))) +
+  coord_flip() +
+  ggtitle(paste("Distribution of 5000 Fastest Growing",
+                "US Companies",
+                sep = "\n")) +
+  ylab("Number of companies") +
+  theme_minimal()
+```
+
+### Question 2
+
+```{r p2}
+# Top 5 states by number of companies:
+(df %>% group_by(State) %>% 
+  summarize(Companies = n_distinct(Name)) %>% 
+  arrange(desc(Companies)))[1:5, ]
+
+ny <- df %>% filter(State == "NY")
+ny <- ny[complete.cases(ny), ]
+
+min_whisker2 <- ny %>% group_by(Industry) %>%
+  summarize(Min_Whisker = boxplot.stats(Employees)$stats[1]) 
+
+max_whisker2 <- ny %>% group_by(Industry) %>%
+  summarize(Max_Whisker = boxplot.stats(Employees)$stats[5])
+
+ny <- inner_join(ny, min_whisker2, by = "Industry")
+ny <- inner_join(ny, max_whisker2, by = "Industry")
+
+ny <- ny %>% filter(Employees >= Min_Whisker & Employees <= Max_Whisker)
+
+ggplot(ny, aes(Industry, Employees)) +
+  ggtitle(paste("Number of Employees by Industry among", 
+                "Fastest Growing NY Companies",
+                sep = "\n")) +
+  ylab("Number of employees") +
+  stat_summary(fun.y = "mean",
+               fun.ymin = "min", 
+               fun.ymax = "max",
+               geom = "pointrange",
+               aes(linetype = "Average\n(Minimum-Maximum)")) +
+  scale_linetype_manual(values = c("dashed")) + 
+  labs(linetype = "") +
+  theme_minimal() +
+  theme(axis.text.x=element_text(angle = 90, hjust = 1))
+```
+
+### Question 3
+
+```{r p3, warning = FALSE}
+max_whisker3 <- as.numeric((df %>% group_by(Industry) %>% 
+  summarize(Max_Whisker = boxplot.stats(Revenue / Employees)$stats[5]) %>% 
+  arrange(desc(Max_Whisker)))[1, 2])
+cutoff <- plyr::round_any(max_whisker3, 
+                          10^(floor(log10(max_whisker3)) - 1), 
+                          f = ceiling)
+
+ggplot(df, aes(Revenue / Employees)) +
+  geom_density() +
+  facet_wrap(~ Industry, 
+             ncol = 1, 
+             scales = "free_y",
+             switch = "y") +
+  coord_cartesian(xlim = c(0, cutoff)) +
+  ggtitle(paste("Revenue per Employee by Industry across", 
+                "Fastest Growing US Companies", 
+                sep = "\n")) +
+  xlab("Revenue per employee") +
+  ylab("Industry") +
+  scale_x_continuous(labels = function(x) paste0("$", as.integer(x))) +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.y = element_text(angle = 180, hjust = 1),
+        panel.margin = unit(0 , "lines"),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()) +
+  geom_vline(data = df %>% group_by(Industry) %>% 
+               summarize(Avg_Rev_per_Employee = mean(Revenue / Employees, na.rm = TRUE)), 
+             aes(xintercept = Avg_Rev_per_Employee, color = "Average")) +
+  scale_color_manual(values = c("Average" = "red")) +
+  labs(color = "")
+```
