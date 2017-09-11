@@ -1,7 +1,7 @@
 ---
 title: "Data 608 Homework 1"
 author: "Judd Anderman"
-date: "September 5, 2017"
+date: "September 10, 2017"
 output: 
   html_document:
     code_folding: hide
@@ -20,7 +20,7 @@ df <- read.csv(url)
 ### Question 1
 
 ```{r p1, warning = FALSE, message = FALSE, fig.height = 7}
-ggplot(df, aes(State)) +
+p1 <- ggplot(df, aes(State)) +
   geom_bar() +
   scale_x_discrete(limits = rev(levels(df$State))) +
   coord_flip() +
@@ -29,12 +29,13 @@ ggplot(df, aes(State)) +
                 sep = "\n")) +
   ylab("Number of companies") +
   theme_minimal()
+
+p1
 ```
 
 ### Question 2
-
+Top 5 states by number of companies:
 ```{r p2}
-# Top 5 states by number of companies:
 (df %>% group_by(State) %>% 
   summarize(Companies = n_distinct(Name)) %>% 
   arrange(desc(Companies)))[1:5, ]
@@ -53,7 +54,7 @@ ny <- inner_join(ny, max_whisker2, by = "Industry")
 
 ny <- ny %>% filter(Employees >= Min_Whisker & Employees <= Max_Whisker)
 
-ggplot(ny, aes(Industry, Employees)) +
+p2 <- ggplot(ny, aes(Industry, Employees)) +
   ggtitle(paste("Number of Employees by Industry among", 
                 "Fastest Growing NY Companies",
                 sep = "\n")) +
@@ -67,6 +68,8 @@ ggplot(ny, aes(Industry, Employees)) +
   labs(linetype = "") +
   theme_minimal() +
   theme(axis.text.x=element_text(angle = 90, hjust = 1))
+
+p2
 ```
 
 ### Question 3
@@ -79,7 +82,7 @@ cutoff <- plyr::round_any(max_whisker3,
                           10^(floor(log10(max_whisker3)) - 1), 
                           f = ceiling)
 
-ggplot(df, aes(Revenue / Employees)) +
+p3 <- ggplot(df, aes(Revenue / Employees)) +
   geom_density() +
   facet_wrap(~ Industry, 
              ncol = 1, 
@@ -104,4 +107,12 @@ ggplot(df, aes(Revenue / Employees)) +
              aes(xintercept = Avg_Rev_per_Employee, color = "Average")) +
   scale_color_manual(values = c("Average" = "red")) +
   labs(color = "")
+
+p3
+```
+
+```{r save, warning = FALSE, message = FALSE}
+ggsave("Figure1.jpg", p1, height = 7)
+ggsave("Figure2.jpg", p2)
+ggsave("Figure3.jpg", p3)
 ```
