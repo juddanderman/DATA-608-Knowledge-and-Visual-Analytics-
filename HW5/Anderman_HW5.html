@@ -1,0 +1,134 @@
+<html>
+<head><title>Data 608 Homework 5</title></head>
+<body>
+    <h2>Data 608 Assignment 5</h2>
+    <h3>Judd Anderman<br>November 5, 2017</h3>
+    <form onkeypress="return event.keyCode != 13;">
+        Enter text to reverse below:<br>
+        <input type="text" id="txt_input" autocomplete="off" oninput="revStr();"><br>
+    </form>
+
+    <div id="target1">&nbsp;</div>
+
+    <br>
+
+    <div>
+        Enter number below for its first 20 multiples:<br>
+        <input type="number" id="num_input" autocomplete="off"
+            onkeypress="if(event.keyCode == 13) document.getElementById('btn').click();">
+        <input type="button" id="btn" value="Get first 20 multiples" onclick="multTab();">
+    </div>
+
+    <div id="target2"></div>
+
+    <form onkeypress="return event.keyCode != 13;">
+        <br>
+        Presidential height and weight:<br>
+        <input type="text" id="pres_input" autocomplete="off" oninput="presStats();"><br>
+    </form>
+
+    <div>
+        <br>
+        <div id="target3"></div>
+        <br>
+    </div>
+
+    <div id="target4"></div>
+
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.11.0/d3.js"></script>
+
+    <script type="text/javascript">
+        function revStr () {
+            var txt = document.getElementById("txt_input").value;
+            var out = "";
+            for (var i = txt.length - 1; i >= 0; i--) {
+                out += txt[i];
+            }
+            var el = document.getElementById("target1");
+            if (out.length > 0) {
+                el.innerHTML = out;
+            } else {
+                el.innerHTML = "&nbsp;"
+            }
+        };
+
+        function multTab () {
+            var num = document.getElementById("num_input").value;
+            var out = "";
+            var r, c;
+            for (r = 1; r < 6; r++) {
+                if (r == 1) {
+                    out += "<table>";
+                }
+                for (c = 1; c < 5; c++) {
+                    if (c == 1) {
+                        out += "<tr>";
+                    }
+                    out += "<td>" + (num * ((r - 1) * 4 + c)) + "</td>"
+                    if (c == 4) {
+                        out += "</tr>";
+                    }
+                }
+                if (r == 5) {
+                    out += "</table>";
+                }
+            }
+            document.getElementById("target2").innerHTML = out;
+        };
+
+        var data_url = "https://raw.githubusercontent.com/charleyferrari/CUNY_DATA608/master/lecture5/js_examples/Hello%20World/data/presidents.csv";
+
+        var pres_data = [];
+
+        d3.csv(data_url, function(data) {
+            pres_data = data;
+            var rows = data.length;
+            var cols = d3.keys(data[0]).length
+            var col_names = d3.keys(data[0]);
+
+            var out = "";
+            for (var r = 0; r < rows; r++) {
+                if (r == 0) {
+                    out += "<table>";
+                    out += "<tr>";
+                    for (var i = 0; i < cols; i++) {
+                        out += "<th>" + col_names[i] + "</th>"
+                    }
+                    out += "</tr>";
+                } else {
+                    for (c = 0; c < cols; c++) {
+                        if (c == 0) {
+                            out += "<tr>";
+                        }
+                        out += "<td>" + data[r][col_names[c]] + "</td>";
+                        if (c == cols - 1) {
+                            out += "</tr>";
+                        }
+                    }
+                    if (r == rows) {
+                        out += "</table>";
+                    }
+                }
+            };
+            document.getElementById("target4").innerHTML = out;
+        });
+
+        function presStats () {
+            var filt = [];
+            var q = document.getElementById("pres_input").value.replace(/\./gi, "");
+            console.log(q);
+            var out = ""
+;           for (i = 0; i < pres_data.length; i++) {
+                if (pres_data[i].Name.toLowerCase().replace(/\./gi, "").search(q.toLowerCase()) > -1 && q.length > 0) {
+                    console.log(q);
+                    out += pres_data[i].Name +
+                        "; Height: " + pres_data[i].Height +
+                        "; Weight: " + pres_data[i].Weight + "<br>";
+                }
+                document.getElementById("target3").innerHTML = out;
+            }
+        };
+
+    </script>
+</body
+</html>
