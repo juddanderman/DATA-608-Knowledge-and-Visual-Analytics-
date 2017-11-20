@@ -1,0 +1,85 @@
+---
+title: "Data 608: HW6 Data Cleaning"
+author: "Judd Anderman"
+date: "November 19, 2017"
+output: html_document
+---
+
+```{r load-pkgs}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(jsonlite)
+library(ggplot2)
+```
+
+```{r user-pw, echo = FALSE}
+# store API keys in unshared folder and read-in for querying
+source("~/Documents/Fall 2017/Data_608_API_Keys.R")
+```
+
+```{r clean-nys-pqi-zips}
+# health <- fromJSON("Hospital_Inpatient_Prevention_Quality_Indicators__PQI__for_Adult_Discharges_by_Zip_Code__SPARCS___Beginning_2009.json")
+# cols <- health$meta$view$columns
+
+health <- read.csv("Hospital_Inpatient_Prevention_Quality_Indicators__PQI__for_Adult_Discharges_by_Zip_Code__SPARCS___Beginning_2009.csv", stringsAsFactors = FALSE)
+
+colnames(health) <- str_replace_all(colnames(health), "100\\.000", "100000")
+colnames(health) <- str_replace_all(colnames(health), "\\.", "_")
+
+health_2015 <- health %>% 
+  filter(Year == 2015 & Patient_Zipcode != "STATEWIDE") %>%
+  select(Year, Patient_Zipcode, PQI_Number, PQI_Name, Observed_Rate_Per_100000_People)
+
+# unique(nchar(health_2015$Patient_Zipcode))
+
+health_2015$Patient_Zipcode <- ifelse(nchar(health_2015$Patient_Zipcode) == 4, 
+                                      str_c("0", health_2015$Patient_Zipcode),
+                                      health_2015$Patient_Zipcode)
+
+write.csv(health_2015, file = "NYS_PQI_2015.csv", row.names = FALSE)
+```
+
+```{r acs-5-yr}
+acs_5yr_vars <- fromJSON("https://api.census.gov/data/2015/acs/acs5/profile/variables.json")
+acs_5yr_vars <- acs_5yr_vars$variables
+
+rmValidValues <- function(l) {
+  if ("validValues" %in% names(l)) {
+    l <- l[!(names(l) == "validValues")]
+  } else {
+    l <- l
+  }
+}
+
+acs_5yr_vars <- lapply(acs_5yr_vars, rmValidValues)
+acs_5yr_vars <- bind_rows(acs_5yr_vars, .id = "name")
+
+acs_base_url <- paste0("https://api.census.gov/data/2015/acs/acs5/profile?key=", census_key)
+acs_query <- "&get=DP03_0062E,DP03_0063E&for=zip%20code%20tabulation%20area:*"
+
+acs_hh_income <- data.frame(fromJSON(paste0(acs_base_url, acs_query)), stringsAsFactors = FALSE)
+colnames(acs_hh_income) <- acs_hh_income[1, ]
+acs_hh_income <- acs_hh_income[-1, ]
+colnames(acs_hh_income) <- c("Median_Household_Income", "Mean_Household_Income", "ZCTA5")
+
+write.csv(acs_hh_income, file = "ACS_2015_Median_Mean_HH_Income.csv", row.names = FALSE)
+
+data <- inner_join(health_2015, acs_hh_income, by = c("Patient_Zipcode" = "ZCTA5"))
+data <- data[data$Median_Household_Income >= 0 & data$Mean_Household_Income >= 0, ]
+data$Median_Household_Income <- as.numeric(data$Median_Household_Income)
+data$Mean_Household_Income <- as.numeric(data$Mean_Household_Income)
+
+write.csv(data, file = "NYS_Health_Wealth_2015.csv", row.names = FALSE)
+data_json <- toJSON(data)
+write(data_json, file = "NYS_Health_Wealth_2015.json")
+```
+
+```{r test-plot}
+# data <- read.csv("NYS_Health_Wealth_2015.csv", stringsAsFactors = FALSE)
+ggplot(subset(data, PQI_Number == "PQI_15"), aes(Observed_Rate_Per_100000_People)) + geom_histogram()
+
+ggplot(subset(data, PQI_Number == "PQI_01"), 
+       aes(Median_Household_Income, Observed_Rate_Per_100000_People)) +
+  geom_point()
+```
