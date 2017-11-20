@@ -1,0 +1,280 @@
+<html>
+<style>
+    rect.bar { fill: steelblue; }
+</style>
+<head><title>Data 608 Homework 6</title></head>
+<body>
+    <h2>Data 608 Homework 6: Health & Wealth in New York State</h2>
+    <h3>Judd Anderman<br>November 19, 2017</h3>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.11.0/d3.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <div id="dropdown_menu">
+        Prevention Quality Indicator (PQI):<br><select id="dropdown">
+        </select>
+    </div>
+
+    <div id="container">
+        <div id="graph1" style="float: left; width: 40%; height: 70%"></div>
+
+        <div id="graph2" style="float: left; margin-left: 10%; width: 40%; height: 70%"></div>
+    </div>
+
+    <script>
+        var gdiv = document.getElementById("graph2");
+
+        var data_url = "https://raw.githubusercontent.com/juddanderman/DATA-608-Knowledge-and-Visual-Analytics-/master/HW6/NYS_Health_Wealth_2015.json"
+
+        Plotly.d3.json(data_url, function(data) {
+            var pqi = d3.nest()
+                .key(function(d) { return d.PQI_Name }).sortKeys(d3.ascending)
+                .entries(data);
+
+            var list = d3.select("body")
+                .select("#dropdown_menu")
+                .select("select")
+
+            list.selectAll("option")
+                .data(pqi)
+                .enter()
+                .append("option")
+                .attr("value", function(d) { return d.key; })
+                .text(function(d) { return d.key; });
+
+            var subset = pqi.filter(function (d) { return d.key === "Asthma in Younger Adults" })[0];
+
+            // console.log(subset);
+
+            plot_data = [
+                {
+                    x: subset.values.map(function(d) {
+                        return d["Median_Household_Income"];
+                    }),
+                    y: subset.values.map(function(d) {
+                        return d["Observed_Rate_Per_100000_People"];
+                    }),
+                    text: subset.values.map(function(d) {
+                        return "Zip Code: "+d["Patient_Zipcode"];
+                    }),
+                    type: "scatter",
+                    mode: "markers",
+                    marker: { color: "steelblue" }
+                }
+            ];
+
+            layout = {
+                hovermode:'closest',
+                title: "Health and Wealth in New York State (2015):<br>"+subset.key,
+                xaxis: {
+                    title: "Median Household Income ($)",
+                },
+                yaxis: {
+                    title: "Observed Rate per 100,000 People"
+                }
+            };
+
+            Plotly.plot(gdiv, plot_data, layout);
+
+            var hdiv = document.getElementById("graph1").getBoundingClientRect();
+            //console.log(hdiv.width, hdiv.height);
+            var margin = {top: 100, right: 20, bottom: 70, left: 70},
+                width = hdiv.width - margin.left - margin.right,
+                height = hdiv.height - margin.top - margin.bottom;
+
+            var rates = subset.values.map(function(d) {
+                return d["Observed_Rate_Per_100000_People"];
+            });
+
+            var x = d3.scaleLinear()
+                .domain([Math.min.apply( Math, rates ), Math.max.apply( Math, rates )])
+                .range([0, width]);
+
+            var histogram = d3.histogram()
+                .domain(x.domain())
+                .thresholds(x.ticks(20));
+
+            var bins = histogram(rates)
+
+            var y = d3.scaleLinear()
+                 .domain([0, d3.max(bins, function(d) { return d.length; })])
+                 .range([height, 0]);
+
+            var svg = d3.select("body")
+                .select("#container")
+                .select("#graph1")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform",
+                      "translate(" + margin.left + "," + margin.top + ")");
+
+            var bars = svg.selectAll("rect")
+                .data(bins)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", 1)
+                .attr("transform", function(d) {
+                    return "translate(" + x(d.x0) + "," + y(d.length) + ")"; })
+                    .attr("width", function(d) { return x(d.x1) - x(d.x0) -1 ; })
+                    .attr("height", function(d) { return height - y(d.length); });
+
+            svg.append("g")
+               .attr("transform", "translate(0," + height + ")")
+               .call(d3.axisBottom(x));
+
+            svg.append("text")
+                .attr("transform",
+                      "translate(" + (width/2) + " ," +
+                                     (height + margin.top - 50) + ")")
+                .style("text-anchor", "middle")
+                .text("Observed Rate per 100,000 People");
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 0 - margin.left)
+                .attr("x",0 - (height / 2))
+                .attr("dy", "1em")
+                .style("text-anchor", "middle")
+                .text("Count");
+
+            svg.append("text")
+                .attr("x", (width / 2))
+                .attr("y", 0 - (margin.top / 2))
+                .attr("text-anchor", "middle")
+                .text("Distribution of");
+
+            svg.append("text")
+                .attr("x", (width / 2))
+                .attr("y", 0 - (margin.top / 2))
+                .attr("dy", "1em")
+                .attr("text-anchor", "middle")
+                .text(subset.key);
+
+            svg.append("text")
+                .attr("x", (width / 2))
+                .attr("y", 0 - (margin.top / 2))
+                .attr("dy", "2em")
+                .attr("text-anchor", "middle")
+                .text("across NYS Zip Code Areas (2015)");
+
+            d3.select("#dropdown")
+                .on("change", function(data){
+                    subset = pqi.filter(function (d) { return d.key === d3.event.target.value })[0];
+
+                    // update d3 histogram
+                    rates = subset.values.map(function(d) {
+                        return d["Observed_Rate_Per_100000_People"];
+                    });
+
+                    x = d3.scaleLinear()
+                        .domain([Math.min.apply( Math, rates ), Math.max.apply( Math, rates )])
+                        .range([0, width]);
+
+                    histogram = d3.histogram()
+                        .domain(x.domain())
+                        .thresholds(x.ticks(20));
+
+                    bins = histogram(rates)
+
+                    y = d3.scaleLinear()
+                         .domain([0, d3.max(bins, function(d) { return d.length; })])
+                         .range([height, 0]);
+
+                    svg.selectAll("*").remove();
+
+                    svg = d3.select("body")
+                        .select("#container")
+                        .select("#graph1")
+                        .select("svg")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom)
+                        .append("g")
+                        .attr("transform",
+                              "translate(" + margin.left + "," + margin.top + ")");
+
+                    bars = svg.selectAll("rect")
+                        .data(bins)
+                        .enter().append("rect")
+                        .attr("class", "bar")
+                        .attr("x", 1)
+                        .attr("transform", function(d) {
+                            return "translate(" + x(d.x0) + "," + y(d.length) + ")"; })
+                            .attr("width", function(d) { return x(d.x1) - x(d.x0) -1 ; })
+                            .attr("height", function(d) { return height - y(d.length); });
+
+                    svg.append("g")
+                       .attr("transform", "translate(0," + height + ")")
+                       .call(d3.axisBottom(x));
+
+                    svg.append("text")
+                        .attr("transform",
+                              "translate(" + (width/2) + " ," +
+                                             (height + margin.top - 50) + ")")
+                        .style("text-anchor", "middle")
+                        .text("Observed Rate per 100,000 People");
+
+                    svg.append("g")
+                        .call(d3.axisLeft(y));
+
+                    svg.append("text")
+                        .attr("transform", "rotate(-90)")
+                        .attr("y", 0 - margin.left)
+                        .attr("x",0 - (height / 2))
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .text("Count");
+
+                    svg.append("text")
+                        .attr("x", (width / 2))
+                        .attr("y", 0 - (margin.top / 2))
+                        .attr("text-anchor", "middle")
+                        .text("Distribution of");
+
+                    svg.append("text")
+                        .attr("x", (width / 2))
+                        .attr("y", 0 - (margin.top / 2))
+                        .attr("dy", "1em")
+                        .attr("text-anchor", "middle")
+                        .text(subset.key);
+
+                    svg.append("text")
+                        .attr("x", (width / 2))
+                        .attr("y", 0 - (margin.top / 2))
+                        .attr("dy", "2em")
+                        .attr("text-anchor", "middle")
+                        .text("across NYS Zip Code Areas (2015)");
+
+                    // update plotly scatter plot
+                    new_data = {
+                        x: [subset.values.map(function(d) {
+                            return d["Median_Household_Income"];
+                        })],
+                        y: [subset.values.map(function(d) {
+                            return d["Observed_Rate_Per_100000_People"];
+                        })],
+                        text: [subset.values.map(function(d) {
+                            return "Zip Code: "+d["Patient_Zipcode"];
+                        })]
+                    };
+
+
+                    new_layout = {
+                        title: "Health and Wealth in New York State (2015):<br>"+subset.key
+                    };
+
+                    Plotly.restyle(gdiv, new_data);
+                    Plotly.relayout(gdiv, new_layout);
+
+                });
+
+        });
+
+    </script>
+
+</body>
+</html>
