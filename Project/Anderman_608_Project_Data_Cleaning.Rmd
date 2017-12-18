@@ -1,0 +1,272 @@
+---
+title: "Data 608 Final Project"
+author: "Judd Anderman"
+date: "December 12, 2017"
+output: html_document
+---
+
+```{r set-wd}
+# set working directory as needed
+setwd("~/DATA 608 Knowledge and Visual Analytics/Project")
+```
+
+```{r load-pkgs}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(jsonlite)
+library(ggplot2)
+library(leaflet)
+library(rgdal)
+```
+
+```{r user-pw, echo = FALSE}
+# store API keys in unshared folder and read-in for querying
+source("~/Documents/Fall 2017/Data_608_API_Keys.R")
+```
+
+```{r ny-zip-codes}
+zips <- read.csv("https://raw.githubusercontent.com/juddanderman/DATA-608-Knowledge-and-Visual-Analytics-/master/Project/Data/New_York_State_ZIP_Codes-County_FIPS_Cross-Reference.csv", stringsAsFactors = FALSE)
+zips <- zips %>%
+  mutate(ZIP.Code = str_pad(ZIP.Code, width = 5, side = "left", pad = "0")) %>%
+  distinct(ZIP.Code)
+```
+
+```{r clean-nys-pqi-zips}
+# health <- fromJSON("Hospital_Inpatient_Prevention_Quality_Indicators__PQI__for_Adult_Discharges_by_Zip_Code__SPARCS___Beginning_2009.json")
+# cols <- health$meta$view$columns
+
+health <- read.csv("Hospital_Inpatient_Prevention_Quality_Indicators__PQI__for_Adult_Discharges_by_Zip_Code__SPARCS___Beginning_2009.csv", stringsAsFactors = FALSE)
+
+colnames(health) <- str_replace_all(colnames(health), "100\\.000", "100000")
+colnames(health) <- str_replace_all(colnames(health), "\\.", "_")
+ 
+# health_2015 <- health %>% 
+#   filter(Year == 2015 & Patient_Zipcode != "STATEWIDE") %>%
+#   select(Year, Patient_Zipcode, PQI_Number, PQI_Name, Observed_Rate_Per_100000_People)
+# 
+# unique(nchar(health_2015$Patient_Zipcode))
+# 
+# health_2015$Patient_Zipcode <- ifelse(nchar(health_2015$Patient_Zipcode) == 4, 
+#                                       str_c("0", health_2015$Patient_Zipcode),
+#                                       health_2015$Patient_Zipcode)
+
+# write.csv(health_2015, file = "NYS_PQI_2015.csv", row.names = FALSE)
+```
+
+```{r census-vars-all}
+acs_5yr_vars <- fromJSON("https://api.census.gov/data/2015/acs/acs5/profile/variables.json")
+acs_5yr_vars <- acs_5yr_vars$variables
+
+rmValidValues <- function(l) {
+  if ("validValues" %in% names(l)) {
+    l <- l[!(names(l) == "validValues")]
+  } else {
+    l <- l
+  }
+}
+
+acs_5yr_vars <- lapply(acs_5yr_vars, rmValidValues)
+acs_5yr_vars <- bind_rows(acs_5yr_vars, .id = "name")
+```
+
+```{r census-vars-filtered}
+my_vars <- c("DP02_0015E",
+             "DP02_0016E",
+             "DP02_0066PE",
+             "DP02_0067PE",
+             "DP02_0071PE",
+             "DP02_0079PE",
+             "DP02_0088PE",
+             "DP02_0092PE",
+             "DP02_0101PE",
+             "DP02_0112PE",
+             "DP03_0005PE",
+             "DP03_0007PE",
+             "DP03_0009PE",
+             "DP03_0021PE",
+             "DP03_0025E",
+             "DP03_0062E",
+             "DP03_0063E",
+             "DP03_0096PE",
+             "DP03_0097PE",
+             "DP03_0098PE",
+             "DP03_0099PE",
+             "DP03_0128PE",
+             "DP04_0046PE",
+             "DP04_0047PE",
+             "DP05_0017E",
+             "DP05_0032PE",
+             "DP05_0033PE",
+             "DP05_0034PE",
+             "DP05_0039PE",
+             "DP05_0047PE",
+             "DP05_0052PE",
+             "DP05_0053PE",
+             "DP05_0066PE")
+
+my_vars <- acs_5yr_vars[acs_5yr_vars$name %in% my_vars, ]
+my_vars <- my_vars %>%
+  arrange(name)
+
+# write.csv(my_vars, "My_ACS_Variables.csv", row.names = FALSE)
+```
+
+```{r acs-5-yrs}
+acs_base_url <- paste0("https://api.census.gov/data/2015/acs/acs5/profile?key=", census_key)
+acs_query <- paste0("&get=",
+                    paste0(my_vars$name, collapse = ","),
+                    "&for=zip%20code%20tabulation%20area:*")
+
+# pgs <- vector("list", length(zips$ZIP.Code))
+
+acs <- data.frame(fromJSON(paste0(acs_base_url, acs_query)), stringsAsFactors = FALSE)
+colnames(acs) <- acs[1, ]
+acs <- acs[-1, ]
+acs_ny <- acs %>%
+  filter(`zip code tabulation area` %in% zips$ZIP.Code)
+
+acs_ny <- acs_ny %>%
+  mutate_at(vars(-`zip code tabulation area`),
+            funs(ifelse(as.numeric(.) < 0,
+                        NA,
+                        as.numeric(.))
+            )
+  )
+
+colnames(acs_ny)[colnames(acs_ny) == "zip code tabulation area"] <- "ZCTA5"
+            
+# write.csv(acs_ny, "ACS_5yr_2015_NYS.csv", row.names = FALSE)
+
+# acs_hh_income <- acs_hh_income %>%
+#   mutate(Median_Household_Income = ifelse(as.numeric(Median_Household_Income) < 0, 
+#                                           NA,
+#                                           as.numeric(Median_Household_Income)),
+#          Mean_Household_Income = ifelse(as.numeric(Mean_Household_Income) < 0, 
+#                                           NA,
+#                                           as.numeric(Mean_Household_Income)))
+# write.csv(acs_hh_income, file = "NYS_2015_HH_Income.csv", row.names = FALSE)
+# 
+# data <- inner_join(health_2015, acs_hh_income, by = c("Patient_Zipcode" = "ZCTA5"))
+# data <- data[data$Median_Household_Income >= 0 & data$Mean_Household_Income >= 0, ]
+# data$Median_Household_Income <- as.numeric(data$Median_Household_Income)
+# data$Mean_Household_Income <- as.numeric(data$Mean_Household_Income)
+
+# write.csv(data, file = "NYS_Health_Wealth_2015.csv", row.names = FALSE)
+# data_json <- toJSON(data)
+# write(data_json, file = "NYS_Health_Wealth_2015.json")
+```
+
+```{r test-plot}
+# data <- read.csv("NYS_Health_Wealth_2015.csv", stringsAsFactors = FALSE)
+ggplot(subset(data, PQI_Number == "PQI_15"), aes(Observed_Rate_Per_100000_People)) + geom_histogram()
+
+ggplot(subset(data, PQI_Number == "PQI_01"), 
+       aes(Median_Household_Income, Observed_Rate_Per_100000_People)) +
+  geom_point()
+```
+
+```{r zip-map}
+zips <- read.csv("https://raw.githubusercontent.com/juddanderman/DATA-608-Knowledge-and-Visual-Analytics-/master/Project/Data/New_York_State_ZIP_Codes-County_FIPS_Cross-Reference.csv", stringsAsFactors = FALSE)
+zips <- zips %>%
+  mutate(ZIP.Code = str_pad(ZIP.Code, width = 5, side = "left", pad = "0")) %>%
+  distinct(ZIP.Code)
+
+# zips <- shapefile("tl_2015_us_zcta510/tl_2015_us_zcta510.shp")
+zcta5 <- readOGR(dsn = "cb_2016_us_zcta510_500k", 
+                 layer = "cb_2016_us_zcta510_500k",
+                 stringsAsFactors = FALSE)
+
+zcta5 <- zcta5[zcta5$ZCTA5CE10 %in% zips$ZIP.Code, ]
+
+quantile(acs_hh_income$Median_Household_Income, probs = seq(0, 1, 0.1), na.rm = TRUE)
+quantile(acs_hh_income$Mean_Household_Income, probs = seq(0, 1, 0.1), na.rm = TRUE)
+
+health_wide <- health_2015 %>%
+  select(-PQI_Name) %>%
+  spread(PQI_Number, Observed_Rate_Per_100000_People)
+
+zcta5 <- merge(zcta5, acs_hh_income, by.x = "ZCTA5CE10", by.y = "ZCTA5")
+zcta5 <- merge(zcta5, health_wide, by.x = "ZCTA5CE10", by.y = "Patient_Zipcode")
+
+bins <- unique(quantile(acs_hh_income$Median_Household_Income, probs = seq(0, 1, 0.1), na.rm = TRUE))
+pal <- colorBin("YlOrRd", domain = acs_hh_income$Median_Household_Income, bins = bins)
+
+map1 <- leaflet(data = zcta5) %>% 
+  addTiles() %>% 
+  addPolygons(fillColor = ~pal(Median_Household_Income), 
+              weight = 1, 
+              opacity = 1,
+              color = "white",
+              fillOpacity = 0.7) %>% 
+  addLegend(pal = pal, 
+            values = ~Median_Household_Income,
+            labFormat = labelFormat(prefix = "$", between = " &ndash; $", digits = 0),
+            opacity = 0.7, 
+            title = "Median household income",
+            position = "bottomleft")
+
+map1
+
+bins <- unique(quantile(health_wide$PQI_01, probs = seq(0, 1, 0.1), na.rm = TRUE))
+pal <- colorBin("YlGnBu", domain = health_wide$PQI_01, bins = bins)
+
+map2 <- leaflet(data = zcta5) %>% 
+  addTiles() %>% 
+  addPolygons(fillColor = ~pal(PQI_01), 
+              weight = 1, 
+              opacity = 1,
+              color = "white",
+              fillOpacity = 0.7) %>% 
+  addLegend(pal = pal, 
+            values = ~PQI_01,
+            labFormat = labelFormat(digits = 2),
+            opacity = 0.7, 
+            title = "PQI 01",
+            position = "bottomleft")
+
+map2
+```
+
+```{r write-shapefile}
+# dir.create("nys_2016_zcta5")
+# writeOGR(obj = zcta5, dsn = "nys_2016_zcta5", layer = "nys_2016_zcta5", driver = "ESRI Shapefile")
+# writeOGR(obj = zcta5, dsn = "nys_2016_zcta5.GeoJSON", layer = "nys_2016_zcta5", driver = "GeoJSON")
+
+nys <- readOGR(dsn = "nys_2016_zcta5.GeoJSON", stringsAsFactors = FALSE)
+
+leaflet(data = nys) %>% 
+  addTiles() %>% 
+  addPolygons(fill = FALSE, 
+              weight = 1, 
+              color = "black")
+```
+
+```{r ratio-score}
+test <- data %>%
+  group_by(PQI_Number, PQI_Name) %>%
+  mutate(Rate = scale(Observed_Rate_Per_100000_People),
+         Median = scale(Median_Household_Income))
+
+test <- test %>%
+  filter(PQI_Number == "PQI_03")
+
+ggplot(test, aes(Median, Rate)) +
+  geom_point()
+
+ggplot(test, aes(Median_Household_Income, Observed_Rate_Per_100000_People)) +
+  geom_point()
+
+test <- test %>%
+  mutate(Ratio = Observed_Rate_Per_100000_People / Median_Household_Income,
+         Scaled_Ratio = scale(Observed_Rate_Per_100000_People / Median_Household_Income))
+
+ggplot(test, aes(Observed_Rate_Per_100000_People / Median_Household_Income)) +
+  geom_histogram()
+
+ggplot(test, aes(Rate / Median_Household_Income)) +
+  geom_histogram()
+
+ggplot(test, aes(scale(Observed_Rate_Per_100000_People / Median_Household_Income))) +
+  geom_histogram()
+```
