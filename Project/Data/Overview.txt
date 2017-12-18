@@ -1,4 +1,4 @@
-There is increasingly widespread recognition of the fact that health outcomes are often profoundly shaped by social factors, and that disparate access and uneven distributions of social, economic, and environmental resources lead to inequities in community and population health status and risk.  
+There is increasingly widespread recognition of the fact that health outcomes are often profoundly shaped by social factors, and that disparate access to and uneven distributions of social, economic, and environmental resources lead to inequities in community and population health status and risk.  
 
 This Shiny application explores the social determinants of health in New York state and their spatial manifestation by integrating and visualizing data on social, economic, housing, and other population characteristics from the United States Census Bureau's 2015 5-Year American Community Survey (ACS) and Prevention Quality Indicator (PQI) scores for the same year obtained from the NYS Department of Health's Health Data NY portal.     
 
